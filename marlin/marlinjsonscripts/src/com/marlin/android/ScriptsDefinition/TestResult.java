@@ -5,6 +5,7 @@
 package com.marlin.android.ScriptsDefinition;
 
 import java.util.Date;
+import java.util.List;
 
 /**
  *
@@ -18,19 +19,19 @@ public class TestResult
      */
     private String Name;
     
-    private String _DeviceId;
+    private String DeviceId;
     
     /*
      * List of all the URLs that must be test
      */ 
-    private URLTestResult[] URLResults;
+    private List<URLTestResult> URLResults;
     
-    private Date _StartTest;
-    private Date _EndTest;
-    private Date _PostTime;
-    private TestResultState _Estate;
-    private int _RunNumber;
-    private Layer[] _Layers;
+    private Date StartTest;
+    private Date EndTest;
+    private Date PostTime;
+    private TestResultState State;
+    private int RunNumber;
+    private List<Layer> Layers;
 
     /**
      * @return the Id
@@ -64,27 +65,27 @@ public class TestResult
      * @return the _DeviceId
      */
     public String getDeviceId() {
-        return _DeviceId;
+        return DeviceId;
     }
 
     /**
      * @param DeviceId the _DeviceId to set
      */
     public void setDeviceId(String DeviceId) {
-        this._DeviceId = DeviceId;
+        this.DeviceId = DeviceId;
     }
 
     /**
      * @return the URLResults
      */
-    public URLTestResult[] getURLResults() {
+    public List<URLTestResult> getURLResults() {
         return URLResults;
     }
 
     /**
      * @param URLResults the URLResults to set
      */
-    public void setURLResults(URLTestResult[] URLResults) {
+    public void setURLResults(List<URLTestResult> URLResults) {
         this.URLResults = URLResults;
     }
 
@@ -92,83 +93,83 @@ public class TestResult
      * @return the _StartTest
      */
     public Date getStartTest() {
-        return _StartTest;
+        return StartTest;
     }
 
     /**
      * @param StartTest the _StartTest to set
      */
     public void setStartTest(Date StartTest) {
-        this._StartTest = StartTest;
+        this.StartTest = StartTest;
     }
 
     /**
      * @return the _EndTest
      */
     public Date getEndTest() {
-        return _EndTest;
+        return EndTest;
     }
 
     /**
      * @param EndTest the _EndTest to set
      */
     public void setEndTest(Date EndTest) {
-        this._EndTest = EndTest;
+        this.EndTest = EndTest;
     }
 
     /**
      * @return the _PostTime
      */
     public Date getPostTime() {
-        return _PostTime;
+        return PostTime;
     }
 
     /**
-     * @param PostTime the _PostTime to set
+     * @param PostTime the PostTime to set
      */
     public void setPostTime(Date PostTime) {
-        this._PostTime = PostTime;
+        this.PostTime = PostTime;
     }
 
     /**
-     * @return the _Estate
+     * @return the State
      */
     public TestResultState getEstate() {
-        return _Estate;
+        return State;
     }
 
     /**
-     * @param Estate the _Estate to set
+     * @param State the state to set
      */
-    public void setEstate(TestResultState Estate) {
-        this._Estate = Estate;
+    public void setState(TestResultState State) {
+        this.State = State;
     }
 
     /**
-     * @return the _RunNumber
+     * @return the RunNumber
      */
     public int getRunNumber() {
-        return _RunNumber;
+        return RunNumber;
     }
 
     /**
-     * @param RunNumber the _RunNumber to set
+     * @param RunNumber the RunNumber to set
      */
     public void setRunNumber(int RunNumber) {
-        this._RunNumber = RunNumber;
+        this.RunNumber = RunNumber;
     }
 
     /**
      * @return the _Layers
      */
-    public Layer[] getLayers() {
-        return _Layers;
+    public List<Layer> getLayers() {
+        return Layers;
     }
 
     /**
      * @param Layers the _Layers to set
      */
-    public void setLayers(Layer[] Layers) {
-        this._Layers = Layers;
+    public void setLayers(List<Layer> Layers) {
+        this.Layers = Layers;
     }
 }

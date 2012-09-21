@@ -4,4 +4,4 @@
  */
 package com.marlin.android.ScriptsDefinition;
 
-public enum TestModifier {RUN_ONE_TIME};
+public enum TestModifier {RUN_ONE_TIME, RUN_AVERAGE};

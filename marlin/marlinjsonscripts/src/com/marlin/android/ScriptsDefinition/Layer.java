@@ -7,6 +7,7 @@ package com.marlin.android.ScriptsDefinition;
 import java.io.Serializable;
 import java.util.Dictionary;
 import java.util.List;
+import java.util.Map;
 
 /**
  *
@@ -15,7 +16,7 @@ import java.util.List;
 public class Layer  implements Serializable
 {
     private String LayerName;
-    private Dictionary<String, String> LayerBody;
+    private Map<String, String> LayerBody;
 
     /**
      * @return the LayerName
@@ -34,14 +35,14 @@ public class Layer  implements Serializable
     /**
      * @return the LayerBody
      */
-    public Dictionary<String, String> getLayerBody() {
+    public Map<String, String> getLayerBody() {
         return LayerBody;
     }
 
     /**
-     * @param LayerBody the LayerBody to set
+     * @param dic the LayerBody to set
      */
-    public void setLayerBody(Dictionary<String, String> LayerBody) {
-        this.LayerBody = LayerBody;
+    public void setLayerBody(Map<String, String> dic) {
+        this.LayerBody = dic;
     }
 }

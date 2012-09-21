@@ -7,15 +7,11 @@ package com.marlin.android.ScriptsDefinition;
 import java.sql.Time;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.Dictionary;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.json.JSONObject;
-import java.text.DateFormat;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-
-import android.util.Log;
 
 import com.google.gson.Gson;
 /**
@@ -35,31 +31,43 @@ public class MarlinScripts
         Test test = new Test();
         test.setEndDate(new Date());
         test.setStartDate(test.getEndDate());
-        List<Layer> x = new ArrayList<Layer>();
-        test.setLayerSpecs(x);
-        Layer lay = new Layer();
-        lay.setLayerName("Pop");
-        //lay.setLayerBody("<Proto><definition render=\"1.0\"></Proto>");
-        test.getLayerSpecs().add(lay);
-        test.getLayerSpecs().add(lay);
+        List<Layer> layers = new ArrayList<Layer>();
+        test.setLayerSpecs(layers);
+        Layer layer = new Layer();
+        layer.setLayerName("Pop");
+        Map<String,String> dic = new HashMap<String,String>();
+        dic.put("testkey", "testvalue");
+        dic.put("thekey", "thevalue");
+        layer.setLayerBody(dic);
+        test.getLayerSpecs().add(layer);
+        test.getLayerSpecs().add(layer);
         
         test.setMeasures(new ArrayList<Measure>());
         
-        Measure metric = new Measure();
-        metric.setType(MeasureType.CARRIER);
-        metric.setMeasureItem("AT&T");
-        metric.setValue("");
-        test.getMeasures().add(metric);
+        Measure measure1 = new Measure();
+        measure1.setType(MeasureType.CARRIER);
+        measure1.setMeasureItem("AT&T");
+        measure1.setValue("");
+        measure1.setCategory(MeasureCategory.PERFORMANCE);
+        measure1.setStarTime(new Date());
+        measure1.setEndTime(new Date());
+        measure1.setMetric(Metric.MILISECOND);
         
-        metric = new Measure();
-        metric.setType(MeasureType.CARRIER);
-        metric.setMeasureItem("Sprint");
-        metric.setValue("thevalue");
-        test.getMeasures().add(metric);
+        test.getMeasures().add(measure1);
+        
+        measure1 = new Measure();
+        measure1.setType(MeasureType.CARRIER);
+        measure1.setMeasureItem("Sprint");
+        measure1.setValue("thevalue");
+        measure1.setCategory(MeasureCategory.PERFORMANCE);
+        measure1.setStarTime(new Date());
+        measure1.setEndTime(new Date());
+        measure1.setMetric(Metric.MILISECOND);
+        test.getMeasures().add(measure1);
         
         test.setModifiers(new ArrayList<TestModifier>());
         test.getModifiers().add(TestModifier.RUN_ONE_TIME);
-        test.getModifiers().add(TestModifier.RUN_ONE_TIME);
+        test.getModifiers().add(TestModifier.RUN_AVERAGE);
         
         test.setName("Name of the test");
         test.setTimeZone("UTC");
@@ -75,7 +83,7 @@ public class MarlinScripts
         test.setURLs(new ArrayList<TestURL>());
         test.getURLs().add(new TestURL());
         test.getURLs().get(0).setType(URLTypes.PAGE);
-        test.getURLs().get(0).setURL("http://www.testhost.com/site");
+        test.getURLs().get(0).setURL("http://www.nacion.com/");
         
         
         test.getURLs().get(0).setSteps(new Step[2]);
@@ -111,28 +119,30 @@ public class MarlinScripts
         
         Gson gson = new Gson();
 		String data = gson.toJson(test);
-		Log.i("Marlin", data);
+		//Log.i("Marlin", data);
 		System.out.println(data);
+		
+		System.out.println(IJsonObject.ToGsonString(data));
 		
 	    
 		
-		Test myobj = gson.fromJson(data, Test.class);
-		Test eed = gson.fromJson(obj.toString(), test.getClass());
-		System.out.println(myobj.getId());
-		System.out.println(eed.getId());
+		//Test myobj = gson.fromJson(data, Test.class);
+		//Test eed = gson.fromJson(obj.toString(), test.getClass());
+		//System.out.println(myobj.getId());
+		//System.out.println(eed.getId());
         
         // Result Test
         
         TestResult result = new TestResult();
         result.setDeviceId("DeviceId");
-        result.setEstate(TestResultState.COMPLETED);
-        result.setLayers(new Layer[2]);
+        result.setState(TestResultState.COMPLETED);
+        result.setLayers(new ArrayList<Layer>());
         
         Layer layRes = new Layer();
         layRes.setLayerName("Pop");
 
-        result.getLayers()[0] = layRes;
-        result.getLayers()[1]= layRes;
+        result.getLayers().add(layRes);
+        result.getLayers().add(layRes);
         
         result.setName("TestName");
         result.setStartTest(new Date());
@@ -140,11 +150,11 @@ public class MarlinScripts
         
         result.setRunNumber(1);
         
-        result.setURLResults(new URLTestResult[1]);
+        result.setURLResults(new ArrayList<URLTestResult>());
         URLTestResult testResult= new URLTestResult();
         testResult.setType(URLTypes.PAGE);
         testResult.setURL("http://www.testhost.com/site");
-        testResult.setResults(new Measure[2]);
+        testResult.setResults(new ArrayList<Measure>());
         Measure measure = new Measure();
         measure.setMeasureItem("Image_001");
         measure.setType(MeasureType.LOAD);
@@ -157,15 +167,15 @@ public class MarlinScripts
         measure2.setMetric(Metric.MILISECOND);
         measure2.setValue("1250");
         
-        testResult.getResults()[0] = measure;
-        testResult.getResults()[1] = measure2;
+        testResult.getResults().add(measure);
+        testResult.getResults().add(measure2);
 
-        result.getURLResults()[0] = testResult;
+        result.getURLResults().add(testResult);
         
         
 
         
-        JSONObject objResult = new JSONObject(result);
-        System.out.println(objResult.toString());
+        String objResult = gson.toJson(result);
+        System.out.println(objResult);
     }
 }

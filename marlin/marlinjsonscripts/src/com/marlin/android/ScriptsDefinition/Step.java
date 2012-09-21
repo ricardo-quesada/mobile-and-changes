@@ -12,7 +12,7 @@ import java.io.Serializable;
 public class Step  implements Serializable{
     private int Number;
     private ActionType Type;
-    private int waitTime;
+    private int WaitTime;
     private String Object;
     private String Method;
     private String ExtendedSpec;
@@ -49,14 +49,14 @@ public class Step  implements Serializable{
      * @return the waitTime
      */
     public int getWaitTime() {
-        return waitTime;
+        return WaitTime;
     }
 
     /**
      * @param waitTime the waitTime to set
      */
     public void setWaitTime(int waitTime) {
-        this.waitTime = waitTime;
+        this.WaitTime = waitTime;
     }
 
     /**

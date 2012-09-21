@@ -75,4 +75,52 @@ public class Measure  implements Serializable
     public void setMetric(Metric Metric) {
         this.Metric = Metric;
     }
+
+    /**
+     * 
+     * @return the Category
+     */
+	public MeasureCategory getCategory() {
+		return Category;
+	}
+
+	/**
+	 * 
+	 * @param category The category to set
+	 */
+	public void setCategory(MeasureCategory category) {
+		Category = category;
+	}
+
+	/**
+	 * 
+	 * @return the Start Time
+	 */
+	public Date getStarTime() {
+		return StarTime;
+	}
+
+	/**
+	 * 
+	 * @param starTime the Start Time to set
+	 */
+	public void setStarTime(Date starTime) {
+		StarTime = starTime;
+	}
+
+	/**
+	 * 
+	 * @return the End Time
+	 */
+	public Date getEndTime() {
+		return EndTime;
+	}
+
+	/**
+	 * 
+	 * @param endTime The end time to set
+	 */
+	public void setEndTime(Date endTime) {
+		EndTime = endTime;
+	}
 }

@@ -5,19 +5,20 @@
 package com.marlin.android.ScriptsDefinition;
 
 import java.io.Serializable;
+import java.util.List;
 
 public class URLTestResult  implements Serializable
 {
     private String URL;
     private URLTypes Type;
-    private Measure[] _Results;
+    private List<Measure> Results;
 
     /**
      * 
      * @return the list of measures collected
      */
-    public Measure[] getResults() {
-        return _Results;
+    public List<Measure> getResults() {
+        return Results;
     }
 
     
@@ -25,8 +26,8 @@ public class URLTestResult  implements Serializable
      * 
      * @param _Results the list measures to set
      */
-    public void setResults(Measure[] _Results) {
-        this._Results = _Results;
+    public void setResults(List<Measure> Results) {
+        this.Results = Results;
     }
 
     /**

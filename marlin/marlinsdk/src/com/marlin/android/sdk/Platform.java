@@ -460,10 +460,7 @@ public class Platform {
 			eventList.addAll(Arrays.asList(sr.getEvents()));
 		}
 		eventList.addAll(events);
-		sr.setEvents((Event[]) eventList.toArray(new Event[eventList.size()]));
-		
-		//Ricardo agregando para prueba:
-		
+		sr.setEvents((Event[]) eventList.toArray(new Event[eventList.size()]));		
 
 	}
 
@@ -599,4 +596,22 @@ public class Platform {
 		}
 		return encrypted;
 	}
+	
+	
+	//****************** Adding **********************//
+	
+	public Stats dump2(String scriptId) {
+		stats = new Stats(encrypt(telManager.getDeviceId()));
+		stats.setDeviceDetails(getDeviceDetails(true));
+		if (scriptId != null && scriptId.trim().length() > 0) {
+			stats.setScriptResults(new ScriptResults[] { scriptResults
+					.get(scriptId) });
+		} else {
+			stats.setScriptResults((ScriptResults[]) scriptResults.values()
+					.toArray(new ScriptResults[scriptResults.size()]));
+		}
+
+		return stats;
+	}
+	
 }
