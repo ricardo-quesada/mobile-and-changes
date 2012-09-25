@@ -19,5 +19,6 @@ public class Constants {
 	public static final long PERIOD = 3600000; // one hour
 	// public static final long PERIOD = 60000; // one min
 	
-	public static final String MARLIN_SCRIPTS_URL = "http://marlinmobile.me/tests/index";
+	//public static final String MARLIN_SCRIPTS_URL = "http://192.168.10.54:8080/Service1.svc/rest/gettest";
+	public static final String MARLIN_SCRIPTS_URL= "http://cs.intelligentsense.com/hello_world.html";
 }

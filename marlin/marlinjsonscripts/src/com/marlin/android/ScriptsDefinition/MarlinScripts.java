@@ -86,7 +86,7 @@ public class MarlinScripts
         test.getURLs().get(0).setURL("http://www.nacion.com/");
         
         
-        test.getURLs().get(0).setSteps(new Step[2]);
+        test.getURLs().get(0).setSteps(new ArrayList<Step>());
 
         Step step = new Step();
         step.setExtendedSpec("ExtendedSpec");
@@ -95,7 +95,7 @@ public class MarlinScripts
         step.setObject("TextArea");
         step.setType(ActionType.NAVIGATE);
         step.setWaitTime(1000);        
-        test.getURLs().get(0).getSteps()[0] = step;
+        test.getURLs().get(0).getSteps().add(step);
         
         
         step = new Step();
@@ -105,7 +105,7 @@ public class MarlinScripts
         step.setObject("Button");
         step.setType(ActionType.CLICK);
         step.setWaitTime(2000);        
-        test.getURLs().get(0).getSteps()[1] = step;
+        test.getURLs().get(0).getSteps().add(step);
         
         test.setTestTimes(new String[2]);
         test.getTestTimes()[0] = TimeFormater.TimeToString(new Time(10000));
@@ -122,7 +122,7 @@ public class MarlinScripts
 		//Log.i("Marlin", data);
 		System.out.println(data);
 		
-		System.out.println(IJsonObject.ToGsonString(data));
+		//System.out.println(IJsonObject.ToGsonString(data));
 		
 	    
 		

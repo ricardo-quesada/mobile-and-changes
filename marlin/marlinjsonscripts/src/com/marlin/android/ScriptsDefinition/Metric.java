@@ -8,4 +8,4 @@ package com.marlin.android.ScriptsDefinition;
  *
  * @author rquesada
  */
-public enum Metric {MILISECOND, SECONDS, NANOSECOND, KBPS, BPS}
+public enum Metric {MILISECOND, SECONDS, NANOSECOND, KBPS, BPS, PERCENTAGE, BOOL}

@@ -1,18 +1,16 @@
 package com.marlin.android.app.service;
 
+import java.sql.Time;
+import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.Date;
-import java.sql.Time;
-import java.text.DateFormat;
-import java.text.ParseException;
-
 
 import org.apache.http.HttpEntity;
 import org.apache.http.auth.AuthScope;
@@ -38,17 +36,33 @@ import android.os.SystemClock;
 import android.util.Log;
 
 import com.google.gson.Gson;
+import com.marlin.android.ScriptsDefinition.ActionType;
+import com.marlin.android.ScriptsDefinition.IJsonObject;
+import com.marlin.android.ScriptsDefinition.Layer;
+import com.marlin.android.ScriptsDefinition.Measure;
+import com.marlin.android.ScriptsDefinition.MeasureCategory;
+import com.marlin.android.ScriptsDefinition.MeasureType;
+import com.marlin.android.ScriptsDefinition.Metric;
+import com.marlin.android.ScriptsDefinition.Step;
+import com.marlin.android.ScriptsDefinition.Test;
+import com.marlin.android.ScriptsDefinition.TestModifier;
+import com.marlin.android.ScriptsDefinition.TestResult;
+import com.marlin.android.ScriptsDefinition.TestResultState;
+import com.marlin.android.ScriptsDefinition.TestURL;
+import com.marlin.android.ScriptsDefinition.TimeFormater;
+import com.marlin.android.ScriptsDefinition.URLTestResult;
+import com.marlin.android.ScriptsDefinition.URLTypes;
+import com.marlin.android.WebServiceInteraction.RestHelper;
 import com.marlin.android.app.Constants;
 import com.marlin.android.app.ServiceListener;
 import com.marlin.android.sdk.Battery;
 import com.marlin.android.sdk.DeviceDetails;
+import com.marlin.android.sdk.Event;
 import com.marlin.android.sdk.Memory;
+import com.marlin.android.sdk.PageElement;
 import com.marlin.android.sdk.Platform;
 import com.marlin.android.sdk.ScriptResults;
 import com.marlin.android.sdk.Stats;
-
-import com.marlin.android.WebServiceInteraction.RestHelper;
-import com.marlin.android.ScriptsDefinition.*;
 
 
 public class AppService extends WakefulIntentService {
@@ -134,6 +148,7 @@ public class AppService extends WakefulIntentService {
 
 	@Override
 	protected void doWakefulWork(Intent intent) {
+		//TODO: aqui seria donde manda el pop up para pedir permiso de usar la info del cel
 		SharedPreferences settings = getSharedPreferences(Constants.PREFS_NAME,
 				0);
 		lastRunAt = settings.getLong(Constants.LAST_RUN_AT, 0);
@@ -144,7 +159,7 @@ public class AppService extends WakefulIntentService {
 				Log.d("Marlin", getClass().getName()
 						+ ": Woke up and doing work");
 				currentRunAt = now.getTimeInMillis();
-				doProcess(false);
+				doProcess2(true);
 				SharedPreferences.Editor editor = settings.edit();
 				editor.putLong(Constants.LAST_RUN_AT, currentRunAt);
 				Log.d("Marlin", getClass().getName() + ": saved lastRunAt="
@@ -424,8 +439,11 @@ public class AppService extends WakefulIntentService {
 	// seria mejor recibir una lista de test, agarrarlos uno x uno y convertirlos en Test y meterlos a lista
 
 
-	
-	
+
+	/**
+	 * This will make all the process, take any test and process any url on it
+	 * @param runAll to determine if all the tests should run or only the once in time
+	 */
 	public void doProcess2(boolean runAll) {
 		boolean startable = acquirePlatform();
 		if (startable) {
@@ -458,7 +476,7 @@ public class AppService extends WakefulIntentService {
 						for (TestURL url : test.getURLs()) {
 							Log.d("Marlin", getClass().getName()
 									+ ": ScriptEvent.." + url);
-							pf.processUrl(test.getId()+"", test.getId()+"", test.getName(), url.getURL());
+							pf.processUrl(test.getId()+"", url.getUrlId()+"", test.getName(), url.getURL());
 						}
 					}
 					Stats statsResult = pf.dump2(null);
@@ -483,7 +501,12 @@ public class AppService extends WakefulIntentService {
 					+ ": another thread is running the platform");
 		}
 	}
-	
+
+	/**
+	 * Returns the scripts that should be run
+	 * @param runAll to determine if all the tests should run or only the once in time
+	 * @return The list of tests to run
+	 */
 	private List<Test> getScriptsToRun2(boolean runAll) { //este solo chequea si tienen q correr x la hora
 		List<Test> allTests = getScripts2(); //aqui tendria los tests
 		if (runAll) {
@@ -520,7 +543,11 @@ public class AppService extends WakefulIntentService {
 
 		return testToRun;
 	}
-	
+
+	/**
+	 * Returns all the tests from the web service
+	 * @return the list of tests
+	 */
 	private List<Test> getScripts2(){
 		RestHelper instance = RestHelper.getInstance();
 		List<Test> testList = new ArrayList<Test>();
@@ -528,7 +555,6 @@ public class AppService extends WakefulIntentService {
 		try {
 			jsonResult = instance.GET(Constants.MARLIN_SCRIPTS_URL);
 		} catch (Exception ex) {
-			// TODO Auto-generated catch block
 			ex.printStackTrace();
 		}
 
@@ -548,6 +574,12 @@ public class AppService extends WakefulIntentService {
 		return testList;
 	}
 
+	/**
+	 * Creates a test from a json piece of the downloaded tests
+	 * @param scriptObj the json piece that corresponds to a test
+	 * @return the Test object
+	 * @throws Exception any json transformation exception
+	 */
 	public Test CreateTest(JSONObject scriptObj) throws Exception{
 		Test test = new Test();
 		try {
@@ -599,7 +631,7 @@ public class AppService extends WakefulIntentService {
 			String[] times = gson.fromJson(testTimes.toString(), String[].class);
 			test.setTestTimes(times);
 
-			
+
 			//los measures
 			List<Measure> measures = new ArrayList<Measure>();
 			JSONArray measuresArray = scriptObj.getJSONArray("Measures");
@@ -613,7 +645,7 @@ public class AppService extends WakefulIntentService {
 				mes.setCategory(MeasureCategory.valueOf(measureObj.getString("Category")));
 				mes.setStarTime(new Date(measureObj.getString("StarTime")));
 				mes.setEndTime(new Date(measureObj.getString("EndTime")));
-				
+
 				measures.add(mes);
 			}
 			test.setMeasures(measures);
@@ -638,21 +670,19 @@ public class AppService extends WakefulIntentService {
 					step.setMethod(stepObj.getString("Method"));
 					step.setNumber(stepObj.getInt("Number"));
 					step.setObject(stepObj.getString("Object"));
-					step.setWaitTime(stepObj.getInt("waitTime"));
+					step.setWaitTime(stepObj.getInt("WaitTime"));
 					step.setType(ActionType.valueOf(stepObj.getString("Type")));
 
 					steps.add(step);
 				}
-				url.setSteps((Step[]) steps.toArray());
-
+				url.setSteps(steps);
+				
 				urls.add(url);
 			}
 			test.setURLs(urls);
 
 
 		} catch (JSONException e) {
-			// TODO Auto-generated catch block
-
 			e.printStackTrace();
 			throw e;
 
@@ -660,38 +690,85 @@ public class AppService extends WakefulIntentService {
 		return test;
 	}
 
-	
 
+
+	/**
+	 * Posts the result data to the webapp server
+	 * @param statsResult the test results
+	 */
 	private void postDataToServer(Stats statsResult) {
-		// TODO Auto-generated method stub
-		TestResult testResult = CreateTestResult(statsResult);
-		String jsonString = IJsonObject.ToJsonObject(testResult);	
+		List<TestResult> testResult = CreateTestResult(statsResult);
+		IJsonObject ijsonObject = new IJsonObject();
+		
+		String jsonString = ijsonObject.ToGsonString(testResult);	
 		try {
 			RestHelper instance = RestHelper.getInstance();
 			instance.PUT(Constants.MARLIN_SCRIPTS_URL, jsonString);
 		} catch (Exception ex) {
-			// TODO Auto-generated catch block
 			ex.printStackTrace();
 		}
-		
+
 	}
 
-	private TestResult CreateTestResult(Stats statsResult) {
+	/**
+	 * Creates a TestResult object with the information stored in statsResult
+	 * @param statsResult All the resut test information
+	 * @return the TestResult with the information to be sent
+	 */
+	private List<TestResult> CreateTestResult(Stats statsResult) { //esto se crea x cada 
+		//aqui tengo la info del cel y el resultado de cada test dentro de scriptResults
 
-		TestResult testResult = new TestResult();
-		testResult.setId(2); //TODO: este esta en el test, ver donde almacenar
-		testResult.setName(""); //TODO: este esta en el test, ver donde almacenar
-		testResult.setDeviceId(statsResult.getDeviceId());
-		testResult.setStartTest(new Date());//TODO: ver de donde saco la hora q inicio
-		testResult.setEndTest(new Date());
-		testResult.setState(TestResultState.COMPLETED);
-		testResult.setRunNumber(1);
-		
-		
+		List<Layer> layers = CreateLayers(statsResult); //esta info es general para todos
+
+		List<TestResult> resultTests = new ArrayList<TestResult>();
+		ScriptResults[] scriptsResults = statsResult.getScriptResults(); // todos los tests
+
+		// tengo q hacer este brete de abajo para cada test y meterlo
+		for(int i = 0; i< scriptsResults.length; i++){
+			ScriptResults theResult = scriptsResults[i]; //este es 1 test del mae
+
+			TestResult testResult = new TestResult(); // hago uno mio
+
+
+			testResult.setId(Integer.parseInt(theResult.getScriptId())); //TODO: este esta en el test, ver donde almacenar
+			testResult.setName(""); //TODO: este esta en el test, ver donde almacenar
+			testResult.setDeviceId(statsResult.getDeviceId());
+			testResult.setStartTest(new Date());//TODO: ver de donde saco la hora q inicio
+			testResult.setEndTest(new Date());
+			testResult.setState(TestResultState.COMPLETED); //TODO: Lo tengo en resultdesc
+			testResult.setRunNumber(1);
+
+			//Setting layers
+			testResult.setLayers(layers);//creados arriba, el mismo para todos
+
+			//Setting urls results
+			List<URLTestResult> urlResults = new ArrayList<URLTestResult>();
+
+			for(Event anyUrl : theResult.getEvents()){
+				URLTestResult urlResult = new URLTestResult();
+				urlResult.setType(URLTypes.PAGE);
+				urlResult.setURL(anyUrl.getUrl()); 
+				// los resultados finales
+				List<Measure> results = CreateResultsList(anyUrl);
+				urlResult.setResults(results);
+				urlResults.add(urlResult);
+			}
+			testResult.setURLResults(urlResults);
+			resultTests.add(testResult);
+		}
+
+
+
+		// esta es la parte de crear 1 test result
+
+		return resultTests;
+	}
+
+	private List<Layer> CreateLayers(Stats statsResult){
 		//Setting layers
 		DeviceDetails deviceDetails = statsResult.getDeviceDetails();
 		List<Layer> layers = new ArrayList<Layer>();
-		
+
 		//OS section
 		Layer osLayer = new Layer();
 		osLayer.setLayerName("OS");
@@ -700,7 +777,7 @@ public class AppService extends WakefulIntentService {
 		osBody.put("os_version", deviceDetails.getOperatingSystem().getVersion());
 		osLayer.setLayerBody(osBody);
 		layers.add(osLayer);
-		
+
 		//Battery section
 		Layer batteryLayer = new Layer();
 		batteryLayer.setLayerName("Battery");
@@ -714,56 +791,140 @@ public class AppService extends WakefulIntentService {
 		batteryLayer.setLayerBody(batteryBody);
 		layers.add(batteryLayer);
 
-		
+
 		//localization section
 		Layer localizationLayer = new Layer();
 		localizationLayer.setLayerName("localization");
 		Map<String,String> localizationBody = new HashMap<String,String>();
-		localizationBody.put("latitude", deviceDetails.getLocation().getLatitude());
-		localizationBody.put("longitude", deviceDetails.getLocation().getLongitude());
+		localizationBody.put("latitude", deviceDetails.getLocation() != null ? deviceDetails.getLocation().getLatitude() : "0");
+		localizationBody.put("longitude", deviceDetails.getLocation() != null ? deviceDetails.getLocation().getLongitude() : "0");
 		localizationLayer.setLayerBody(localizationBody);
 		layers.add(localizationLayer);
 
-		
+
 		//timezone
 		//body.put("device_timezone", ""); //TODO: sacar este
-		
+
 		//memory
 		Layer memoryLayer = new Layer();
 		memoryLayer.setLayerName("memory");
 		Map<String,String> memoryBody = new HashMap<String,String>();
 		memoryBody.put("memory_total", deviceDetails.getMemory().getTotal());
 		memoryBody.put("memory_free", deviceDetails.getMemory().getFree());
+		memoryLayer.setLayerBody(memoryBody);
 		layers.add(memoryLayer);
 
 
 		//network
 		for(int networkIndex = 0; networkIndex<deviceDetails.getNetwork().length; networkIndex++){
 			Layer networkLayer = new Layer();
-			networkLayer.setLayerName("network"+networkIndex);
+			networkLayer.setLayerName("network_"+networkIndex);
 			Map<String,String> networkBody = new HashMap<String,String>();
 			networkBody.put("type", deviceDetails.getNetwork()[networkIndex].getType());
 			networkBody.put("phone_technology", deviceDetails.getNetwork()[networkIndex].getPhoneTechnology());
 			networkBody.put("data_technology", deviceDetails.getNetwork()[networkIndex].getDataTechnology());
 			networkBody.put("carrier", deviceDetails.getNetwork()[networkIndex].getCarrier());
 			networkBody.put("signal_strength", deviceDetails.getNetwork()[networkIndex].getSignalStrength());
+			networkLayer.setLayerBody(networkBody);
 			layers.add(networkLayer);
 		}
-		testResult.setLayers(layers);//aqui meto todos los statsResult.getDeviceDetails();
-		
-		//Setting urls results
-		for(ScriptResults test: statsResult.getScriptResults()){
-			test.getScriptId(); //este seria el id q tengo q ponerle a cada url cuando le hago processURL
-			test.getEvents(); //estos events es lo q me devuelve PlatformUrlProcessor.java.processUrl -> debo analizar muy bn q trae ese mae
-//TODO: x aqui voy
+
+		return layers;
+	}
+
+
+	/**
+	 * @param test 
+	 * @return A list of measures
+	 */
+	private List<Measure> CreateResultsList(Event event) {
+
+		List<Measure> results = new ArrayList<Measure>();
+
+		//battery consumption measure
+		Measure batteryMeasure = new Measure();
+		batteryMeasure.setMeasureItem("battery_consumption");
+		batteryMeasure.setCategory(MeasureCategory.PERFORMANCE);
+		batteryMeasure.setType(MeasureType.LOAD);
+		batteryMeasure.setMetric(Metric.PERCENTAGE);
+		batteryMeasure.setValue(event.getPowerConsumption());
+		results.add(batteryMeasure);
+
+		//available measure
+		Measure availableMeasure = new Measure();
+		availableMeasure.setMeasureItem("available");
+		availableMeasure.setCategory(MeasureCategory.DEVICE);
+		availableMeasure.setType(MeasureType.LOAD);
+		availableMeasure.setMetric(Metric.BOOL);
+		availableMeasure.setValue((new Boolean(event.getAvailability()).toString()));
+		results.add(availableMeasure);
+
+		//throughput measure
+		Measure throughputMeasure = new Measure();
+		throughputMeasure.setMeasureItem("throughput");
+		throughputMeasure.setCategory(MeasureCategory.DEVICE);
+		throughputMeasure.setType(MeasureType.LOAD);
+		throughputMeasure.setMetric(Metric.PERCENTAGE);
+		throughputMeasure.setValue(event.getThroughput());
+		results.add(throughputMeasure);
+
+		//redirect count measure
+		Measure redirectMeasure = new Measure();
+		redirectMeasure.setMeasureItem("redirect_count");
+		redirectMeasure.setCategory(MeasureCategory.PERFORMANCE);
+		redirectMeasure.setType(MeasureType.LOAD);
+		//redirectMeasure.setMetric(Metric.BPS);
+		redirectMeasure.setValue(Integer.toString(event.getRedirectCount()));
+		results.add(redirectMeasure);
+
+		//result code measure
+		Measure resultMeasure = new Measure();
+		resultMeasure.setMeasureItem("result_code");
+		resultMeasure.setCategory(MeasureCategory.PERFORMANCE);
+		resultMeasure.setType(MeasureType.LOAD);
+		//redirectMeasure.setMetric(Metric.BPS);
+		resultMeasure.setValue(Integer.toString(event.getResultCode()));
+		results.add(resultMeasure);
+
+		//signal strength measure
+		Measure signalMeasure = new Measure();
+		signalMeasure.setMeasureItem("signal_strength");
+		signalMeasure.setCategory(MeasureCategory.DEVICE);
+		signalMeasure.setType(MeasureType.CARRIER);
+		redirectMeasure.setMetric(Metric.PERCENTAGE);
+		signalMeasure.setValue(event.getSignalStrength());
+		results.add(signalMeasure);
+
+		//bytes download measure
+		Measure bytesMeasure = new Measure();
+		bytesMeasure.setMeasureItem("bytes_download");
+		bytesMeasure.setCategory(MeasureCategory.PERFORMANCE);
+		bytesMeasure.setType(MeasureType.LOAD);
+		//redirectMeasure.setMetric(Metric.BYTES);
+		bytesMeasure.setValue(event.getConnection().getBytesDownloaded());
+		results.add(bytesMeasure);
+
+		//content type measure
+		Measure contentMeasure = new Measure();
+		contentMeasure.setMeasureItem("content_type");
+		contentMeasure.setCategory(MeasureCategory.PERFORMANCE);
+		contentMeasure.setType(MeasureType.LOAD);
+		//redirectMeasure.setMetric(Metric.BYTES);
+		contentMeasure.setValue(event.getConnection().getContentType());
+		results.add(contentMeasure);
+
+
+		List<PageElement> x= event.getPageElements();
+		for(PageElement y : x){
+			// TODO: x aqui voy: en event tengo mucha info de los elementos de la pagina, 
+			//ver como meter aqui
 		}
-		
-		
-		return testResult;
+
+		return results;
 	}
 
 
 	//test string
-    //"[{\"Id\":1, \"Name\":\"Name of the test\",\"Version\":1.0,\"URLs\":[{\"URL\":\"http://www.testhost.com/site\",\"Type\":\"PAGE\",\"Steps\":[{\"Number\":1,\"Type\":\"NAVIGATE\",\"waitTime\":1000,\"Object\":\"TextArea\",\"Method\":\"onclick\",\"ExtendedSpec\":\"ExtendedSpec\"},{\"Number\":1,\"Type\":\"CLICK\",\"waitTime\":2000,\"Object\":\"Button\",\"Method\":\"onChange\",\"ExtendedSpec\":\"ExtendedSpec\"}]}],\"Modifiers\":[\"RUN_ONE_TIME\",\"RUN_ONE_TIME\"],\"LayerSpecs\":[{\"LayerName\":\"Pop\"},{\"LayerName\":\"Pop\"}],\"VerificationNumber\":[10,12,14,16,18],\"Measures\":[{\"Type\":\"CARRIER\",\"MeasureItem\":\"AT\u0026T\",\"Value\":\"\"},{\"Type\":\"CARRIER\",\"MeasureItem\":\"Sprint\",\"Value\":\"thevalue\"}],\"StartDate\":\"Sep 14, 2012 7:34:28 AM\",\"EndDate\":\"Sep 14, 2012 7:34:28 AM\",\"TestTimes\":[\"06:00:10 PM\",\"06:00:20 PM\"],\"TimeZone\":\"UTC\"}]";
+	//"[{\"Id\":1, \"Name\":\"Name of the test\",\"Version\":1.0,\"URLs\":[{\"URL\":\"http://www.testhost.com/site\",\"Type\":\"PAGE\",\"Steps\":[{\"Number\":1,\"Type\":\"NAVIGATE\",\"waitTime\":1000,\"Object\":\"TextArea\",\"Method\":\"onclick\",\"ExtendedSpec\":\"ExtendedSpec\"},{\"Number\":1,\"Type\":\"CLICK\",\"waitTime\":2000,\"Object\":\"Button\",\"Method\":\"onChange\",\"ExtendedSpec\":\"ExtendedSpec\"}]}],\"Modifiers\":[\"RUN_ONE_TIME\",\"RUN_ONE_TIME\"],\"LayerSpecs\":[{\"LayerName\":\"Pop\"},{\"LayerName\":\"Pop\"}],\"VerificationNumber\":[10,12,14,16,18],\"Measures\":[{\"Type\":\"CARRIER\",\"MeasureItem\":\"AT\u0026T\",\"Value\":\"\"},{\"Type\":\"CARRIER\",\"MeasureItem\":\"Sprint\",\"Value\":\"thevalue\"}],\"StartDate\":\"Sep 14, 2012 7:34:28 AM\",\"EndDate\":\"Sep 14, 2012 7:34:28 AM\",\"TestTimes\":[\"06:00:10 PM\",\"06:00:20 PM\"],\"TimeZone\":\"UTC\"}]";
 
 }

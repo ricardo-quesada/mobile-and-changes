@@ -149,7 +149,7 @@ public class ScriptsProcessor {
 					steps.add(step);
 
 				}
-				url.setSteps((Step[]) steps.toArray());
+				url.setSteps(steps);
 
 				urls.add(url);
 			}

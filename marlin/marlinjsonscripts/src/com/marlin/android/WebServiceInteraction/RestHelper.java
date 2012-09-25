@@ -7,6 +7,8 @@ import java.io.InputStreamReader;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPut;
@@ -15,6 +17,8 @@ import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
 import org.apache.http.params.HttpParams;
+import org.apache.http.util.EntityUtils;
+
 
 public class RestHelper {
 
@@ -103,6 +107,40 @@ public class RestHelper {
         	throw Ex;
         }
         
+	}
+
+	public String GetWithCredentials(String pUrl, String pUserName, String pPassword) throws Exception{
+		String scriptStr = null;
+		try {
+			HttpParams httpParameters = new BasicHttpParams();
+			
+        	// Set the timeout in milliseconds until a connection is established.
+			int timeoutConnection = TIME_OUT;
+			HttpConnectionParams.setConnectionTimeout(httpParameters, timeoutConnection);
+			
+			// Set the default socket timeout (SO_TIMEOUT) 
+        	int timeoutSocket = TIME_OUT;
+			HttpConnectionParams.setSoTimeout(httpParameters, timeoutSocket);
+			
+			DefaultHttpClient httpClient = new DefaultHttpClient(httpParameters);
+			
+			// Set connection credentials
+			httpClient.getCredentialsProvider().setCredentials(	
+					new AuthScope(null, -1),
+					new UsernamePasswordCredentials(pUserName,pPassword));
+		
+			HttpGet httpget = new HttpGet(pUrl);
+			HttpEntity httpEntity = httpClient.execute(httpget).getEntity();
+			scriptStr = EntityUtils.toString(httpEntity, "UTF-8");
+		} catch (Exception ex) {
+			Exception Ex = new Exception(
+        			"There was an error excecuting an HTTP GET Request to: " + pUrl, 
+        			ex);
+
+        	throw Ex;
+		}
+		
+		return scriptStr;
 	}
 	
 	private static String convertStreamToString(InputStream pInputStream) throws IOException 
