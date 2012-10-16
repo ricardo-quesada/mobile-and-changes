@@ -34,9 +34,11 @@ public class MarlinApplication extends Application implements ServiceListener {
 
 	@Override
 	public void onCreate() {
+		
 		super.onCreate();
 		bindService(new Intent(MarlinApplication.this, AppService.class),
 				mConnection, Context.BIND_AUTO_CREATE);
+		
 	}
 
 	public void setPhoneActivity(MyPhoneActivity phoneActivity) {
@@ -63,6 +65,11 @@ public class MarlinApplication extends Application implements ServiceListener {
 			}
 			phoneActivity.populateValues(deviceDetails);
 		}
+	}
+
+	
+	public AppService getAppService() {
+		return mAppService;
 	}
 
 	private class InitPlatformTask extends AsyncTask<Void, Integer, Void> {

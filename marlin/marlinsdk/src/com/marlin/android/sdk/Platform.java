@@ -32,6 +32,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.wifi.WifiManager;
 import android.os.BatteryManager;
 import android.os.Bundle;
 import android.os.Debug;
@@ -41,6 +42,7 @@ import android.telephony.SignalStrength;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.webkit.WebView;
+
 
 import com.google.gson.Gson;
 
@@ -62,6 +64,7 @@ public class Platform {
 	private android.location.Location andLocation;
 	private Battery battery;
 	private int signalStrength;
+	private Location lastKnownLocation;
 
 	private BroadcastReceiver battReceiver;
 	private PhoneStateListener listener;
@@ -73,10 +76,17 @@ public class Platform {
 	private boolean step1Initialized = false;
 	private boolean step2Initialized = false;
 
+	private WebViewRunner webViewRunner = null;
+
 	public Platform(Context ctx) {
 		context = ctx;
 		cookieManager = new CookieManager();
 		headers = new HashMap<String, String>();
+	}
+
+	public Platform(Context ctx, WebViewRunner wvRunner) {
+		this(ctx);
+		webViewRunner = wvRunner;
 	}
 
 	public boolean isReady() {
@@ -161,12 +171,23 @@ public class Platform {
 		Log.i("Marlin", "step2 initialized");
 	}
 
+	public String getEncryptedDeviceId() {
+		if (telManager != null) {
+			return encrypt(telManager.getDeviceId());
+		}
+		return null;
+	}
+
 	public Battery getBattery() {
 		return battery;
 	}
 
 	public CookieManager getCookieManager() {
 		return cookieManager;
+	}
+
+	public Location getLastKnownLocation() {
+		return lastKnownLocation;
 	}
 
 	public void clearResults() {
@@ -200,7 +221,7 @@ public class Platform {
 	}
 
 	public void dump(String scriptId) {
-		stats = new Stats(encrypt(telManager.getDeviceId()));
+		stats = new Stats(getEncryptedDeviceId());
 		stats.setDeviceDetails(getDeviceDetails(true));
 		if (scriptId != null && scriptId.trim().length() > 0) {
 			stats.setScriptResults(new ScriptResults[] { scriptResults
@@ -217,11 +238,8 @@ public class Platform {
 	}
 
 	private void getHeaders() throws MalformedURLException {
-		WebView webView = new WebView(context);
 		URL headerMirrorUrl = new URL(HEADER_MIRROR_URL + "?deviceId="
-				+ encrypt(telManager.getDeviceId()));
-
-		webView.loadUrl(headerMirrorUrl.toString());
+				+ getEncryptedDeviceId());
 
 		HttpParams httpParams = new BasicHttpParams();
 		HttpConnectionParams.setConnectionTimeout(httpParams, 60000);
@@ -283,6 +301,7 @@ public class Platform {
 					}
 				} else {
 					dd.setLocation(getLocation());
+					lastKnownLocation = dd.getLocation();
 					break;
 				}
 			}
@@ -315,7 +334,7 @@ public class Platform {
 		dd.setNetwork(getNetworks());
 		return dd;
 	}
-
+	
 	private Network[] getNetworks() {
 		NetworkInfo[] mobileNet = connManager.getAllNetworkInfo();
 		Network[] netList = new Network[mobileNet.length];
@@ -329,6 +348,7 @@ public class Platform {
 				net.setSignalStrength(Integer.toString(signalStrength));
 				net.setCarrier(telManager.getNetworkOperatorName());
 				net.setPhoneNumber(encrypt(telManager.getLine1Number()));
+				
 				switch (telManager.getPhoneType()) {
 				case TelephonyManager.PHONE_TYPE_CDMA:
 					net.setPhoneTechnology("CDMA");
@@ -385,6 +405,10 @@ public class Platform {
 		Memory memory = new Memory();
 		memory.setTotal(Long.toString(Debug.getNativeHeapSize()));
 		memory.setFree(Long.toString(Debug.getNativeHeapFreeSize()));
+		
+		
+		
+		
 		return memory;
 	}
 
@@ -402,7 +426,11 @@ public class Platform {
 				if (addresses != null && addresses.size() > 0) {
 					Address addr = addresses.get(0);
 					location.setAddress(addr.getAddressLine(0));
-					location.setCity(addr.getLocality());
+					String city = addr.getLocality();
+					if (city == null || city.trim().length() == 0) {
+						city = addr.getSubAdminArea();
+					}
+					location.setCity(city);
 					location.setState(addr.getAdminArea());
 					location.setZip(addr.getPostalCode());
 					location.setCountry(addr.getCountryName());
@@ -412,16 +440,17 @@ public class Platform {
 			}
 
 		}
+		Log.d("Marlin", "Location:" + location);
 		return location;
 	}
 
 	public void processUrl(String scriptId, String eventId,
-			String eventDescription, String url) {
-		processUrl(null, scriptId, eventId, eventDescription, url);
+			String eventDescription, String url, String traceRoute) {
+		processUrl(null, scriptId, eventId, eventDescription, url, traceRoute);
 	}
 
 	public void processUrl(WebView wv, String scriptId, String eventId,
-			String eventDescription, String url) {
+			String eventDescription, String url, String traceRoute) {
 		ScriptResults sr = scriptResults.get(scriptId);
 		if (sr == null) {
 			sr = new ScriptResults();
@@ -439,7 +468,8 @@ public class Platform {
 		if (wv == null) {
 			wv = new WebView(context);
 		}
-		List<Event> events = pup.processUrl(wv, cookieManager, headers, url);
+		List<Event> events = pup.processUrl(webViewRunner, cookieManager,
+				headers, url, traceRoute);
 		try {
 			battLevel2 = Integer.parseInt(battery.getLevel());
 		} catch (NumberFormatException e) {
@@ -460,7 +490,7 @@ public class Platform {
 			eventList.addAll(Arrays.asList(sr.getEvents()));
 		}
 		eventList.addAll(events);
-		sr.setEvents((Event[]) eventList.toArray(new Event[eventList.size()]));		
+		sr.setEvents((Event[]) eventList.toArray(new Event[eventList.size()]));
 
 	}
 
@@ -598,20 +628,34 @@ public class Platform {
 	}
 	
 	
+	
 	//****************** Adding **********************//
 	
-	public Stats dump2(String scriptId) {
-		stats = new Stats(encrypt(telManager.getDeviceId()));
-		stats.setDeviceDetails(getDeviceDetails(true));
-		if (scriptId != null && scriptId.trim().length() > 0) {
-			stats.setScriptResults(new ScriptResults[] { scriptResults
-					.get(scriptId) });
-		} else {
-			stats.setScriptResults((ScriptResults[]) scriptResults.values()
-					.toArray(new ScriptResults[scriptResults.size()]));
+		public Stats dump2(String scriptId) {
+			stats = new Stats(encrypt(telManager.getDeviceId()));
+			stats.setDeviceDetails(getDeviceDetails(true));
+			if (scriptId != null && scriptId.trim().length() > 0) {
+				stats.setScriptResults(new ScriptResults[] { scriptResults
+						.get(scriptId) });
+			} else {
+				stats.setScriptResults((ScriptResults[]) scriptResults.values()
+						.toArray(new ScriptResults[scriptResults.size()]));
+			}
+			return stats;
 		}
-
-		return stats;
-	}
-	
+		
+		public String getManufacturer(){
+			return android.os.Build.MANUFACTURER;
+		}
+		
+		public String getDeviceName(){
+			String y = android.os.Build.BRAND; // creo q es este.
+			String z = android.os.Build.DEVICE;
+			String w = android.os.Build.PRODUCT;
+			return y+"-"+z+"-"+w;
+		}
+		
+		
+		
+		
 }

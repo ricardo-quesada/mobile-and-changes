@@ -2,6 +2,5 @@
 <resources>
     <string name="app_name">Mobile Crowd Test</string>
     <string name="optinHeader">Opt-In to the Crowd</string>
-    <string name="optinTextOld">When you click \'ok\' to opt-in, you allow your mobile phone to periodically contribute an anonymous data point to the Marlin Mobile performance network. That means information will be collected and reported to Marlin Mobile about the speed of the mobile web, as measured from your phone. No personal information about you will be collected. Incremental consumption of your battery and data plan will be negligible.</string>
     <string name="optinText">By clicking \'OK\' you allow your mobile device to periodically contribute data to the Mobile Crowd Test project. No personal information about you will be collected. Read the full terms and conditions at http://www.mobilecrowdtest.com/terms.html </string>
 </resources>

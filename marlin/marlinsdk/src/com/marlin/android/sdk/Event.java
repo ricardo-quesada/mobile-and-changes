@@ -16,6 +16,7 @@ public class Event {
 	private Connection connection;
 	private String url;
 	private List<PageElement> pageElements;
+	private List<TraceRouteData> traceRouteData;
 
 	public String getEventId() {
 		return eventId;
@@ -113,6 +114,14 @@ public class Event {
 		this.pageElements = pageElements;
 	}
 
+	public List<TraceRouteData> getTraceRouteData() {
+		return traceRouteData;
+	}
+
+	public void setTraceRouteData(List<TraceRouteData> traceRouteData) {
+		this.traceRouteData = traceRouteData;
+	}
+
 	@Override
 	public String toString() {
 		return "Event [availability=" + availability + ", connection="
@@ -121,7 +130,7 @@ public class Event {
 				+ ", powerConsumption=" + powerConsumption + ", redirectCount="
 				+ redirectCount + ", resultCode=" + resultCode
 				+ ", resultDesc=" + resultDesc + ", signalStrength="
-				+ signalStrength + ", throughput=" + throughput + ", url="
-				+ url + "]";
+				+ signalStrength + ", throughput=" + throughput
+				+ ", traceRouteData=" + traceRouteData + ", url=" + url + "]";
 	}
 }

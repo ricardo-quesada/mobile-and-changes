@@ -12,14 +12,12 @@ import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.zip.GZIPInputStream;
 
-import android.graphics.Bitmap;
 import android.util.Log;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 
 import com.marlin.webclient.HtmlDocument;
 
@@ -42,23 +40,14 @@ public class PlatformUrlProcessor {
 	private String resultDescription;
 	private CookieManager cookieManager;
 	private HashMap<String, String> headers = null;
-	private String htmlOut = null;
 
-	public List<Event> processUrl(WebView wv, CookieManager cm,
-			HashMap<String, String> hdrs, String url) {
-		Log.i("Marlin", getClass().getName() + ": In procesUrl");
+	public List<Event> processUrl(WebViewRunner wvRunner, CookieManager cm,
+			HashMap<String, String> hdrs, String url, String traceRoute) {
 		List<Event> events = new ArrayList<Event>();
 		eventStart = System.currentTimeMillis();
 		eventEnd = 0;
 		resultDescription = "Success";
 
-		if (wv != null) {
-			wv.setWebViewClient(new PlatformWebViewClient());
-			wv.getSettings().setJavaScriptEnabled(true);
-			wv.addJavascriptInterface(new PlatformJavaScriptInterface(),
-					"HTMLOUT");
-		}
-		Log.i("Marlin", getClass().getName() + ": Wv inited");
 		cookieManager = cm;
 		headers = hdrs;
 		// wv.setPictureListener(new PictureListener() {
@@ -75,7 +64,8 @@ public class PlatformUrlProcessor {
 			eventUrl = new URL(url);
 			// start from 1 because redirect count =0 indicates the final url.
 			for (int redirCount = 1; redirCount <= 10; redirCount++) {
-				Log.i("Marlin", getClass().getName() + ": redirCount :" + redirCount);
+				Log.i("Marlin", getClass().getName() + ": redirCount :"
+						+ redirCount);
 				connectionStart = 0;
 				firstByte = 0;
 				connectionEnd = 0;
@@ -99,10 +89,8 @@ public class PlatformUrlProcessor {
 				int respCode = 0;
 				String encoding = null;
 				for (int i = 0; i < 3; i++) {
-					Log.i("Marlin", getClass().getName() + ": Try:" + i);
 					connectionStart = System.currentTimeMillis();
 					con = (HttpURLConnection) eventUrl.openConnection();
-					Log.i("Marlin", getClass().getName() + ": Before setCookies");
 					if (cookieManager != null) {
 						try {
 							cookieManager.setCookies(con);
@@ -111,22 +99,12 @@ public class PlatformUrlProcessor {
 									+ ": Failed to setCookies", e);
 						}
 					}
-					Log.i("Marlin", getClass().getName() + ": Before set headers" + headers);
 					for (String hdrName : headers.keySet()) {
-						if (!"keep-alive"
-								.equalsIgnoreCase(headers.get(hdrName))) {
-							con.setRequestProperty(hdrName, headers
-									.get(hdrName));
-						} else {
-							Log.w("Marlin", getClass().getName()
-									+ ": Ignoring Keep-Alive");
-						}
+						con.setRequestProperty(hdrName, headers.get(hdrName));
 					}
 
 					con.setInstanceFollowRedirects(false);
-					con.connect();
 					respCode = con.getResponseCode();
-					Log.i("Marlin", getClass().getName() + ": before store cookies, Response Code:" + respCode);
 					if (cookieManager != null) {
 						try {
 							cookieManager.storeCookies(con);
@@ -157,8 +135,6 @@ public class PlatformUrlProcessor {
 						bytesCount++;
 						if (firstbyte) {
 							firstByte = System.currentTimeMillis();
-							Log.d("Marlin", getClass().getName()
-									+ ": firstbyte:");
 							firstbyte = false;
 						}
 						sw.write(c);
@@ -233,14 +209,27 @@ public class PlatformUrlProcessor {
 		}
 		contentType = "text/html";
 		eventEnd = 0;
-		Log.i("Marlin", getClass().getName() + ": sw=" + sw.toString());
-		if (wv != null) {
-			wv.loadDataWithBaseURL(eventUrl.toString(), sw.toString(),
+		if (wvRunner != null) {
+			wvRunner.loadDataWithBaseURL(eventUrl.toString(), sw.toString(),
 					contentType, "utf-8", "about:blank");
 			// wait for the page to load for a max of 1 min
 			// check every 2 sec
 			for (int i = 0; i < 30; i++) {
-				if (eventEnd > 0) {
+				HashMap<String, String> wvRunnerResult = wvRunner
+						.getWebViewResults();
+				Log.d("Marlin", getClass().getName() + ": wvRunnerResult="
+						+ wvRunnerResult);
+				if (wvRunnerResult != null) {
+					eventStart = Long.parseLong(wvRunnerResult
+							.get(WebViewRunner.START_TIME));
+					eventEnd = Long.parseLong(wvRunnerResult
+							.get(WebViewRunner.END_TIME));
+					availability = Boolean.parseBoolean(wvRunnerResult
+							.get(WebViewRunner.AVAILABILITY));
+					resultCode = Integer.parseInt(wvRunnerResult
+							.get(WebViewRunner.RESULT_CODE));
+					resultDescription = wvRunnerResult
+							.get(WebViewRunner.RESULT_DESCRIPTION);
 					break;
 				}
 				try {
@@ -275,7 +264,7 @@ public class PlatformUrlProcessor {
 			long timeOut = 5 * 60 * 1000; // default is 5 min
 			if (eventEnd > 0) {
 				timeOut = (eventEnd - eventStart);
-				if (wv != null) {
+				if (wvRunner != null) {
 					timeOut = 2 * timeOut;
 				} else {
 					timeOut = 5 * timeOut;
@@ -291,6 +280,33 @@ public class PlatformUrlProcessor {
 
 		Event event = buildFinalEvent(pes);
 		event.setPageElements(pes);
+
+		// Get TraceRoute Data
+		if (traceRoute != null && !"none".equalsIgnoreCase(traceRoute)) {
+			Set<String> hostNames = new HashSet<String>();
+			hostNames.add(eventUrl.getHost());
+			for (Iterator<PageElement> iter = pes.iterator(); iter.hasNext();) {
+				try {
+					PageElement pe = iter.next();
+					URL eleUrl = new URL(pe.getElementUrl());
+					if ("all".equalsIgnoreCase(traceRoute)
+							|| traceRoute.contains(eleUrl.getHost())) {
+						hostNames.add(eleUrl.getHost());
+					}
+				} catch (Exception e) {
+					Log.e("Marlin", getClass().getName(), e);
+				}
+			}
+
+			long trTimeOut = 10 * 60 * 1000; // default is 10 min
+			TraceRouteProcessor trp = new TraceRouteProcessor(30, trTimeOut);
+			try {
+				event.setTraceRouteData(trp.multiProcessRequest(hostNames));
+			} catch (Exception e) {
+				Log.e("Marlin", getClass().getName(), e);
+			}
+		}
+
 		events.add(event);
 
 		return events;
@@ -386,61 +402,4 @@ public class PlatformUrlProcessor {
 		event.setConnection(con);
 		return event;
 	}
-
-	private class PlatformWebViewClient extends WebViewClient {
-
-		@Override
-		public boolean shouldOverrideUrlLoading(WebView view, String url) {
-			Log.d("Marlin", getClass().getName() + ": NOT loading url:" + url);
-			// view.loadUrl(url);
-			return true;
-		}
-
-		@Override
-		public void onPageStarted(WebView view, String url, Bitmap favicon) {
-			Log.d("Marlin", getClass().getName() + ": on page started:" + url);
-			super.onPageStarted(view, url, favicon);
-			eventEnd = 0;
-		}
-
-		@Override
-		public void onPageFinished(WebView view, String url) {
-			Log.d("Marlin", getClass().getName() + ": on page finished:" + url);
-			eventEnd = System.currentTimeMillis();
-			availability = true;
-			super.onPageFinished(view, url);
-			view
-					.loadUrl("javascript:window.HTMLOUT.showHTML('<head>'+document.getElementsByTagName('html')[0].innerHTML+'</head>');");
-		}
-
-		@Override
-		public void onReceivedError(WebView view, int errorCode,
-				String description, String failingUrl) {
-			Log.d("Marlin", getClass().getName() + ": on received error:"
-					+ failingUrl);
-			eventEnd = System.currentTimeMillis();
-			availability = false;
-			resultCode = errorCode;
-			resultDescription = description;
-			super.onReceivedError(view, errorCode, description, failingUrl);
-		}
-
-		@Override
-		public void onLoadResource(WebView view, String url) {
-			Log.d("Marlin", getClass().getName() + ": on load resource:" + url);
-			super.onLoadResource(view, url);
-		}
-
-	}
-
-	class PlatformJavaScriptInterface {
-		public void showHTML(String html) {
-			// String[] lines = html.split("\n");
-			// for (String line : lines) {
-			// Log.d("Marlin", line);
-			// }
-			htmlOut = html;
-		}
-	}
-	 
 }

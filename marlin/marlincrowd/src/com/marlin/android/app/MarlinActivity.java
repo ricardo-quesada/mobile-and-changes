@@ -2,13 +2,19 @@ package com.marlin.android.app;
 
 import com.marlin.android.app.service.AppService;
 
+
+import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.app.TabActivity;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Resources;
+import android.database.Cursor;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Debug.MemoryInfo;
+import android.provider.CallLog;
 import android.text.SpannableStringBuilder;
 import android.text.method.LinkMovementMethod;
 import android.text.util.Linkify;
@@ -17,6 +23,7 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.TabHost;
 import android.widget.TextView;
+
 
 public class MarlinActivity extends TabActivity {
 
@@ -51,12 +58,19 @@ public class MarlinActivity extends TabActivity {
 				}
 			}
 		}, 5000);
-
+		getCallsTimes();
+		String x = getMemoryDetails();
 		createTabs();
 
+		
 		if(optin) {
+			
 			AppService.toggleService(MarlinActivity.this, true);
 		}
+
+
+
+
 	}
 
 	private void createTabs() {
@@ -133,5 +147,41 @@ public class MarlinActivity extends TabActivity {
 		Log.d("Marlin", getClass().getName() + ": saved optin=" + optin);
 		editor.commit();
 	}
+
+
+	//TODO: Ricardo agregando
+	public void getCallsTimes(){
+		Uri allCalls = Uri.parse("content://call_log/calls");
+		Cursor c = managedQuery(allCalls, null, null, null, null);
+		for(String colName : c.getColumnNames())
+			Log.v("marlin", "Column Name: " + colName);
+
+		if (c.moveToFirst())
+		{
+			do{
+				String id = c.getString(c.getColumnIndex(CallLog.Calls._ID));
+				String num = c.getString(c.getColumnIndex(CallLog.Calls.NUMBER));
+				int type = Integer.parseInt(c.getString(c.getColumnIndex(CallLog.Calls.TYPE)));
+
+				String duration = c.getString(c.getColumnIndex(CallLog.Calls.DURATION));
+				System.out.println("call time duration is"+duration);
+
+				switch (type)
+				{
+				case 1: Log.v("marlin", id + ", " +num + ": INCOMING") ; break;
+				case 2: Log.v("marlin", id + ", " +num + ": OUTGOING") ; break;
+				case 3: Log.v("marlin", id + ", " +num + ": MISSED") ; break;
+				}
+			} while (c.moveToNext());
+		}
+	}
+	
+	public String getMemoryDetails(){
+		android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
+		ActivityManager activityManager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+		activityManager.getMemoryInfo(mi);
+		long availableMegs = mi.availMem / 1048576L;
+		return availableMegs + "";	
+		}
 
 }

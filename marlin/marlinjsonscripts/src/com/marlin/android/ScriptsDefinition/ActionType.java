@@ -12,5 +12,5 @@ import java.io.Serializable;
  */
 public enum ActionType implements Serializable
 {
-    NAVIGATE, CLICK, WAIT
+    NAVIGATE, CLICK, WAIT, load_url
 }

@@ -6,10 +6,10 @@ import com.google.gson.Gson;
 
 public class IJsonObject {
 	
-	public String ToJsonObject (Object object){
+	public JSONObject ToJsonObject (Object object){
 		
 		 JSONObject obj = new JSONObject(object);
-		 return obj.toString();
+		 return obj;
 	}
 	
 	public String ToGsonString (Object object){

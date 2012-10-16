@@ -2,10 +2,11 @@ package com.marlin.android.app;
 
 public class Constants {
 
-//	public static final String SCRIPTS_URL = "http://www.marlinmobile.com:8080/marlinserver/scripts.json";
-	public static final String SCRIPTS_URL = "http://www.marlinmobile.com:8080/marlinserver/mobilecrowdtest.json";
 	// public static final String SCRIPTS_URL =
-	// "http://192.168.1.4:8080/test/scripts.json";
+	// "http://www.marlinmobile.com:8080/marlinserver/scripts/scripts.json";
+	public static final String SCRIPTS_URL = "http://www.marlinmobile.com:8080/marlinserver/scripts/mobilecrowdtest.json";
+	// public static final String SCRIPTS_URL =
+	// "http://192.168.2.100:8080/test/scripts.json";
 	// public static final String SCRIPTS_URL =
 	// "http://gateway.asthra.org:9916/scratch/scripts.json";
 	public static final String SCRIPTS_USERNAME = "marlin";
@@ -18,7 +19,15 @@ public class Constants {
 
 	public static final long PERIOD = 3600000; // one hour
 	// public static final long PERIOD = 60000; // one min
+	public static final String LAST_ADDRESS = "lastAddr";
+	public static final String LAST_CITY = "lastCity";
+	public static final String LAST_STATE = "lastState";
+	public static final String LAST_ZIP = "lastZip";
+	public static final String LAST_COUNTRY = "lastCountry";
+	public static final String LAST_LATITUDE = "lastLatitude";
+	public static final String LAST_LONGITUDE = "lastLongitude";
 	
-	//public static final String MARLIN_SCRIPTS_URL = "http://192.168.10.54:8080/Service1.svc/rest/gettest";
-	public static final String MARLIN_SCRIPTS_URL= "http://cs.intelligentsense.com/hello_world.html";
+	
+	public static final String MARLIN_SCRIPTS_URL = "http://www.marlinmobile.mobi/script_tests.json";//"http://cs.intelligentsense.com/hello_world2.html";
+	
 }

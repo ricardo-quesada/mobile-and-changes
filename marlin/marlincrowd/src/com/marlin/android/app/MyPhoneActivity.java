@@ -3,10 +3,15 @@ package com.marlin.android.app;
 import android.app.Activity;
 import android.os.BatteryManager;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.TextView;
-
 import com.marlin.android.sdk.DeviceDetails;
 import com.marlin.android.sdk.Network;
+
+
+import com.tapjoy.TapjoyConnect;
+
+
 
 public class MyPhoneActivity extends Activity {
 
@@ -15,7 +20,10 @@ public class MyPhoneActivity extends Activity {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.myphonetab);
 		((MarlinApplication) getApplication()).setPhoneActivity(this);
+TapjoyConnect.requestTapjoyConnect(this, "f9949d17-bf52-4148-b5a3-a7aa288c6d80", "ViSO3WCW2Z1aj2KAaK5J");
+
 	}
+
 
 	protected void populateValues(DeviceDetails dd) {
 		String osVersionVal = "Fetching..";
@@ -25,14 +33,14 @@ public class MyPhoneActivity extends Activity {
 			phoneModelVal = dd.getOperatingSystem().getModel();
 		}
 
-		String memoryTotalVal = "Fetching..";
-		String memoryFreeVal = "Fetching..";
-		if (dd != null && dd.getMemory() != null) {
-			Long totMem = Long.valueOf(dd.getMemory().getTotal());
-			Long freeMem = Long.valueOf(dd.getMemory().getFree());
-			memoryTotalVal = totMem / 1024 + " KB";
-			memoryFreeVal = freeMem / 1024 + " KB";
-		}
+	//	String memoryTotalVal = "Fetching..";
+	//	String memoryFreeVal = "Fetching..";
+	//	if (dd != null && dd.getMemory() != null) {
+	//		Long totMem = Long.valueOf(dd.getMemory().getTotal());
+	//		Long freeMem = Long.valueOf(dd.getMemory().getFree());
+	//		memoryTotalVal = totMem / 1024 + " KB";
+	//		memoryFreeVal = freeMem / 1024 + " KB";
+	//	}
 
 		String batteryTypeVal = "Fetching..";
 		String batteryLevelVal = "Fetching..";
@@ -98,8 +106,8 @@ public class MyPhoneActivity extends Activity {
 		((TextView) findViewById(R.id.osVersionVal)).setText(osVersionVal);
 		((TextView) findViewById(R.id.phoneModelVal)).setText(phoneModelVal);
 
-		((TextView) findViewById(R.id.memoryTotalVal)).setText(memoryTotalVal);
-		((TextView) findViewById(R.id.memoryFreeVal)).setText(memoryFreeVal);
+//		((TextView) findViewById(R.id.memoryTotalVal)).setText(memoryTotalVal);
+//		((TextView) findViewById(R.id.memoryFreeVal)).setText(memoryFreeVal);
 
 		((TextView) findViewById(R.id.batteryTypeVal)).setText(batteryTypeVal);
 		((TextView) findViewById(R.id.batteryLevelVal))
@@ -109,7 +117,8 @@ public class MyPhoneActivity extends Activity {
 		((TextView) findViewById(R.id.batteryHealthVal))
 				.setText(batteryHealthVal);
 
-		((TextView) findViewById(R.id.signalVal)).setText(signalVal);
+		((TextView) findViewById(R.id.signalVal))
+				.setText(normalizeSignalStrengthDbm(signalVal));
 		((TextView) findViewById(R.id.carrierVal)).setText(carrierVal);
 		((TextView) findViewById(R.id.roamingVal)).setText(roamingVal);
 	}
@@ -118,6 +127,23 @@ public class MyPhoneActivity extends Activity {
 	protected void onResume() {
 		super.onResume();
 		((MarlinApplication) getApplication()).refreshPhoneData();
+	}
+
+	private String normalizeSignalStrengthDbm(String strength) {
+		// we only have to normalize GSM - CDMA already comes in as dbm.
+		try {
+			int intVal = Integer.parseInt(strength);
+			if (intVal >= 0 && intVal < 32) {
+				int dbmVal = -113 + 2 * intVal;
+				return Integer.toString(dbmVal) + " dBm";
+			} else if (intVal == 99) {
+				return "";
+			}
+		} catch (Exception e) {
+			Log.e("Marlin", "Error while processing signal strength:"
+					+ strength, e);
+		}
+		return strength;
 	}
 
 }

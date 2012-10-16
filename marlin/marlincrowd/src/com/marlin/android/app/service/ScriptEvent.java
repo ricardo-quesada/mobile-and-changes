@@ -4,6 +4,7 @@ public class ScriptEvent {
 	private String eventId;
 	private String url;
 	private String description;
+	private String traceRoute;
 
 	public String getEventId() {
 		return eventId;
@@ -21,6 +22,14 @@ public class ScriptEvent {
 		this.url = url;
 	}
 
+	public String getTraceRoute() {
+		return traceRoute;
+	}
+
+	public void setTraceRoute(String traceRoute) {
+		this.traceRoute = traceRoute;
+	}
+
 	public String getDescription() {
 		return description;
 	}
@@ -32,6 +41,6 @@ public class ScriptEvent {
 	@Override
 	public String toString() {
 		return "ScriptEvent [description=" + description + ", eventId="
-				+ eventId + ", url=" + url + "]";
+				+ eventId + ", traceRoute=" + traceRoute + ", url=" + url + "]";
 	}
 }

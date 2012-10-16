@@ -1,5 +1,8 @@
 package com.marlin.android.app.service;
 
+import java.io.File;
+import java.io.InputStream;
+import java.net.URLEncoder;
 import java.sql.Time;
 import java.text.DateFormat;
 import java.util.ArrayList;
@@ -30,21 +33,30 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.SystemClock;
 import android.util.Log;
+import android.view.Display;
+import android.view.WindowManager;
 
 import com.google.gson.Gson;
 import com.marlin.android.ScriptsDefinition.ActionType;
+import com.marlin.android.ScriptsDefinition.Device;
 import com.marlin.android.ScriptsDefinition.IJsonObject;
 import com.marlin.android.ScriptsDefinition.Layer;
 import com.marlin.android.ScriptsDefinition.Measure;
 import com.marlin.android.ScriptsDefinition.MeasureCategory;
 import com.marlin.android.ScriptsDefinition.MeasureType;
 import com.marlin.android.ScriptsDefinition.Metric;
+import com.marlin.android.ScriptsDefinition.Parameter;
+import com.marlin.android.ScriptsDefinition.SendableDevice;
 import com.marlin.android.ScriptsDefinition.Step;
+import com.marlin.android.ScriptsDefinition.Step2;
 import com.marlin.android.ScriptsDefinition.Test;
+import com.marlin.android.ScriptsDefinition.Test2;
 import com.marlin.android.ScriptsDefinition.TestModifier;
 import com.marlin.android.ScriptsDefinition.TestResult;
 import com.marlin.android.ScriptsDefinition.TestResultState;
@@ -54,24 +66,30 @@ import com.marlin.android.ScriptsDefinition.URLTestResult;
 import com.marlin.android.ScriptsDefinition.URLTypes;
 import com.marlin.android.WebServiceInteraction.RestHelper;
 import com.marlin.android.app.Constants;
+import com.marlin.android.app.HiddenWebViewActivity;
 import com.marlin.android.app.ServiceListener;
 import com.marlin.android.sdk.Battery;
 import com.marlin.android.sdk.DeviceDetails;
 import com.marlin.android.sdk.Event;
+import com.marlin.android.sdk.Location;
 import com.marlin.android.sdk.Memory;
-import com.marlin.android.sdk.PageElement;
+import com.marlin.android.sdk.OperatingSystem;
 import com.marlin.android.sdk.Platform;
 import com.marlin.android.sdk.ScriptResults;
 import com.marlin.android.sdk.Stats;
+import com.marlin.android.sdk.WebViewRunner;
 
 
-public class AppService extends WakefulIntentService {
+
+public class AppService extends WakefulIntentService implements WebViewRunner {
 
 	private ServiceListener listener = null;
 	private static Thread liveThread = null;
 	private static Platform pf = null;
 	private static long lastRunAt = 0;
 	private static long currentRunAt = 0;
+	private static HashMap<String, String> webViewResult = null;
+	private static Location lastKnownLocation = null;
 
 	public class APIBinder extends Binder {
 		public AppService getService() {
@@ -132,6 +150,11 @@ public class AppService extends WakefulIntentService {
 	}
 
 	public static void toggleService(Context context, boolean state) {
+		//TODO: aqui ya acepto el optin, entonces ya aqui puedo mandar la info del cel
+
+		subscribeNewDevice(context);
+		/////
+
 		AlarmManager mgr = (AlarmManager) context
 				.getSystemService(Context.ALARM_SERVICE);
 		Intent i = new Intent(context, OnAlarmReceiver.class);
@@ -146,9 +169,61 @@ public class AppService extends WakefulIntentService {
 		}
 	}
 
+	private static void subscribeNewDevice(Context context) {
+		Device device = getDeviceToSuscribe(context);
+		SendableDevice sendableDevice = new SendableDevice();
+		sendableDevice.setDevice(device);
+
+		// Just in case
+		/*List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
+
+		nameValuePairs.add(new BasicNameValuePair("id", "12345"));
+		nameValuePairs.add(new BasicNameValuePair("stringdata", "Hi"));
+		//instance.postData(Constants.MARLIN_SCRIPTS_URL, nameValuePairs); just in case
+		 */
+
+		IJsonObject ijsonObject = new IJsonObject();
+
+		String jsonDevice = ijsonObject.ToGsonString(sendableDevice);
+
+		try {
+			RestHelper instance = RestHelper.getInstance();
+			instance.POST(Constants.MARLIN_SCRIPTS_URL, jsonDevice);
+
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+	}
+
+	private static Device getDeviceToSuscribe(Context context) {
+		DeviceDetails deviceDetails = pf.getDeviceDetails(true);
+		Device device = new Device();
+		device.setBattery_type(deviceDetails.getBattery().getType());
+		device.setBandwidth(getLinkSpeed(context));
+		device.setBattery_capacity("lookup table");
+		device.setCategory("");
+		device.setDevice_image("lookup table");
+		device.setDevice_manufacturer(pf.getManufacturer());
+		device.setDevice_name(pf.getDeviceName());
+		device.setDisplay_color_depth("lookup table");
+		device.setDisplay_resolution(getScreenSize(context));
+		device.setDisplay_type("");
+		device.setL2_cache("lookup table");
+		device.setMemory_internal(deviceDetails.getMemory().getTotal());
+		device.setMemory_ram("lo tengo en el activity");
+		device.setMemory_removable(deviceDetails.getMemory().getTotal());
+		device.setProcessor_core("lookup table");
+		device.setProcessor_manufacturer("lookup table");
+		device.setProcessor_name(fetch_cpu_info());
+		device.setProcessor_speed("lookup table");
+		device.setStandby_time("no se como");
+		device.setTalk_time("esta en el activity");
+
+		return device;
+	}
+
 	@Override
 	protected void doWakefulWork(Intent intent) {
-		//TODO: aqui seria donde manda el pop up para pedir permiso de usar la info del cel
 		SharedPreferences settings = getSharedPreferences(Constants.PREFS_NAME,
 				0);
 		lastRunAt = settings.getLong(Constants.LAST_RUN_AT, 0);
@@ -159,7 +234,24 @@ public class AppService extends WakefulIntentService {
 				Log.d("Marlin", getClass().getName()
 						+ ": Woke up and doing work");
 				currentRunAt = now.getTimeInMillis();
-				doProcess2(true);
+				// load last known location
+				lastKnownLocation = new Location();
+				lastKnownLocation.setAddress(settings.getString(
+						Constants.LAST_ADDRESS, ""));
+				lastKnownLocation.setCity(settings.getString(
+						Constants.LAST_CITY, ""));
+				lastKnownLocation.setState(settings.getString(
+						Constants.LAST_STATE, ""));
+				lastKnownLocation.setZip(settings.getString(Constants.LAST_ZIP,
+						""));
+				lastKnownLocation.setCountry(settings.getString(
+						Constants.LAST_COUNTRY, ""));
+				lastKnownLocation.setLatitude(settings.getString(
+						Constants.LAST_LATITUDE, ""));
+				lastKnownLocation.setLongitude(settings.getString(
+						Constants.LAST_LONGITUDE, ""));
+				Log.d("Marlin", getClass().getName() + ": loading location=" + lastKnownLocation);
+				doProcess3(false);//TODO: Aqui comienza mi cambio
 				SharedPreferences.Editor editor = settings.edit();
 				editor.putLong(Constants.LAST_RUN_AT, currentRunAt);
 				Log.d("Marlin", getClass().getName() + ": saved lastRunAt="
@@ -209,7 +301,7 @@ public class AppService extends WakefulIntentService {
 
 			try {
 				initialzePlatform(true);
-				List<Script> scripts = getScriptsToRun(runAll); //Aqui tendria los test q corren.
+				List<Script> scripts = getScriptsToRun(runAll);
 				if (scripts != null && scripts.size() > 0) {
 					// wait for the platform to be ready for 30 sec
 					// check every 2 sec
@@ -232,7 +324,8 @@ public class AppService extends WakefulIntentService {
 							Log.d("Marlin", getClass().getName()
 									+ ": ScriptEvent.." + se);
 							pf.processUrl(s.getScriptId(), se.getEventId(), se
-									.getDescription(), se.getUrl());
+									.getDescription(), se.getUrl(), se
+									.getTraceRoute());
 						}
 					}
 					pf.dump();
@@ -282,8 +375,8 @@ public class AppService extends WakefulIntentService {
 		}
 	}
 
-	private List<Script> getScriptsToRun(boolean runAll) { //este solo chequea si tienen q correr x la hora
-		List<Script> allScripts = getScripts(); //aqui tendria un test
+	private List<Script> getScriptsToRun(boolean runAll) {
+		List<Script> allScripts = getScripts();
 		if (runAll) {
 			return allScripts;
 		}
@@ -299,7 +392,7 @@ public class AppService extends WakefulIntentService {
 					selected = false;
 				} else {
 					try {
-						String[] runHours = runAt.split(","); //este es el testtimes
+						String[] runHours = runAt.split(",");
 						Calendar cal = Calendar.getInstance(TimeZone
 								.getTimeZone("UTC"));
 						for (String runHour : runHours) {
@@ -307,12 +400,16 @@ public class AppService extends WakefulIntentService {
 									+ s.getScriptId() + " runHour=" + runHour);
 							cal.set(Calendar.HOUR_OF_DAY, Integer
 									.parseInt(runHour));
+							cal.set(Calendar.MINUTE, 0);
+							cal.set(Calendar.SECOND, 0);
+							cal.set(Calendar.MILLISECOND, 0);
 							long nextRun = cal.getTimeInMillis();
 							Log.v("Marlin", getClass().getName() + ": nextRun="
 									+ nextRun + " lastRunAt=" + lastRunAt
 									+ " currentRunAt=" + currentRunAt);
-							if (nextRun > lastRunAt //Chequea si tiene q correr el test
-									&& nextRun < (currentRunAt + Constants.PERIOD)) {
+							if (nextRun > lastRunAt
+									&& nextRun < currentRunAt
+									&& nextRun + Constants.PERIOD > currentRunAt) {
 								// we have to run this time
 								selected = true;
 								break;
@@ -338,11 +435,7 @@ public class AppService extends WakefulIntentService {
 		return scriptsToRun;
 	}
 
-
-
-
-
-	private List<Script> getScripts() { 
+	private List<Script> getScripts() {
 		List<Script> scriptList = new ArrayList<Script>();
 
 		HttpParams httpParams = new BasicHttpParams();
@@ -355,7 +448,36 @@ public class AppService extends WakefulIntentService {
 						Constants.SCRIPTS_PASSWORD));
 		String scriptStr = null;
 		try {
-			HttpGet httpget = new HttpGet(Constants.SCRIPTS_URL);
+			StringBuilder scriptsUrl = new StringBuilder(Constants.SCRIPTS_URL);
+			scriptsUrl.append("?deviceId=").append(
+					URLEncoder.encode(pf.getEncryptedDeviceId()));
+			Context ctx = getApplicationContext();
+			scriptsUrl.append("&versionCode="
+					+ ctx.getPackageManager().getPackageInfo(
+							ctx.getPackageName(), 0).versionCode);
+			if (lastKnownLocation != null) {
+				scriptsUrl.append("&locAddr="
+						+ URLEncoder.encode(lastKnownLocation.getAddress()));
+				scriptsUrl.append("&locCity="
+						+ URLEncoder.encode(lastKnownLocation.getCity()));
+				scriptsUrl.append("&locState="
+						+ URLEncoder.encode(lastKnownLocation.getState()));
+				scriptsUrl.append("&locZip="
+						+ URLEncoder.encode(lastKnownLocation.getZip()));
+				scriptsUrl.append("&locCountry="
+						+ URLEncoder.encode(lastKnownLocation.getCountry()));
+				scriptsUrl.append("&locLat="
+						+ URLEncoder.encode(lastKnownLocation.getLatitude()));
+				scriptsUrl.append("&locLon="
+						+ URLEncoder.encode(lastKnownLocation.getLongitude()));
+			}
+			scriptsUrl.append("&model="
+					+ URLEncoder.encode(OperatingSystem.getInstance()
+							.getModel()));
+
+			Log.d("Marlin", getClass().getName() + ": Scripts Url="
+					+ scriptsUrl.toString());
+			HttpGet httpget = new HttpGet(scriptsUrl.toString());
 			HttpEntity he = httpClient.execute(httpget).getEntity();
 			scriptStr = EntityUtils.toString(he, "UTF-8");
 		} catch (Exception e) {
@@ -383,6 +505,7 @@ public class AppService extends WakefulIntentService {
 						se.setEventId(eventObj.getString("eventId"));
 						se.setDescription(eventObj.getString("description"));
 						se.setUrl(eventObj.getString("url"));
+						se.setTraceRoute(eventObj.getString("traceRoute"));
 						eventList.add(se);
 					}
 					sc.setScriptEvents(eventList);
@@ -430,8 +553,51 @@ public class AppService extends WakefulIntentService {
 		editor.putString(Constants.RUN_HISTORY, sb.toString());
 		Log.d("Marlin", getClass().getName() + ": saved history="
 				+ sb.toString());
+
+		lastKnownLocation = pf.getLastKnownLocation();
+		Log.d("Marlin", getClass().getName() + ": saved location=" + lastKnownLocation);
+		if (lastKnownLocation != null) {
+			editor.putString(Constants.LAST_ADDRESS, lastKnownLocation
+					.getAddress());
+			editor.putString(Constants.LAST_CITY, lastKnownLocation.getCity());
+			editor
+			.putString(Constants.LAST_STATE, lastKnownLocation
+					.getState());
+			editor.putString(Constants.LAST_ZIP, lastKnownLocation.getZip());
+			editor.putString(Constants.LAST_COUNTRY, lastKnownLocation
+					.getCountry());
+			editor.putString(Constants.LAST_LATITUDE, lastKnownLocation
+					.getLatitude());
+			editor.putString(Constants.LAST_LONGITUDE, lastKnownLocation
+					.getLongitude());
+		}
 		editor.commit();
 	}
+
+	public void setWebViewResult(HashMap<String, String> wvResult) {
+		webViewResult = wvResult;
+	}
+
+	@Override
+	public HashMap<String, String> getWebViewResults() {
+		return webViewResult;
+	}
+
+	@Override
+	public void loadDataWithBaseURL(String baseUrl, String data,
+			String mimeType, String encoding, String failUrl) {
+		webViewResult = null;
+		Log.w("Marlin", getClass().getName() + ": loadWebView called");
+		Intent intent = new Intent(this, HiddenWebViewActivity.class);
+		intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+		intent.putExtra(BASE_URL, baseUrl);
+		intent.putExtra(DATA, data);
+		intent.putExtra(MIME_TYPE, mimeType);
+		intent.putExtra(ENCODING, encoding);
+		intent.putExtra(FAIL_URL, failUrl);
+		startActivity(intent);
+	}
+
 
 
 	///*********************************************************************///
@@ -476,7 +642,77 @@ public class AppService extends WakefulIntentService {
 						for (TestURL url : test.getURLs()) {
 							Log.d("Marlin", getClass().getName()
 									+ ": ScriptEvent.." + url);
-							pf.processUrl(test.getId()+"", url.getUrlId()+"", test.getName(), url.getURL());
+							pf.processUrl(test.getId()+"", url.getUrlId()+"", test.getName(), url.getURL(), url.getURL());//TODO: el ultimo getURL va a ser el traceroute. Ese debe venir en el test.
+						}
+					}
+					Stats statsResult = pf.dump2(null);
+					postDataToServer(statsResult);
+					addHistory();
+				}
+
+				Log.d("Marlin", getClass().getName() + ": received:"
+						+ tests.size());
+			} catch (Exception e) {
+				Log.d("Marlin", getClass().getName(), e);
+			} finally {
+				stopPlatform();
+			}
+
+			releasePlatform();
+			if (listener != null) {
+				listener.platformAvailable();
+			}
+		} else {
+			Log.d("Marlin", getClass().getName()
+					+ ": another thread is running the platform");
+		}
+	}
+
+
+
+	/**
+	 * This will make all the process, take any test and process any url on it
+	 * @param runAll to determine if all the tests should run or only the once in time
+	 */
+	public void doProcess3(boolean runAll) {
+		boolean startable = acquirePlatform();
+		if (startable) {
+			if (listener != null) {
+				listener.platformBusy();
+			}
+			Log.d("Marlin", getClass().getName() + ": platform started");
+
+
+			try {
+				initialzePlatform(true);
+				List<Test2> tests = getScripts3(); //Aqui tendria los test q corren.
+				if (tests != null && tests.size() > 0) {
+					// wait for the platform to be ready for 30 sec
+					// check every 2 sec
+					for (int i = 0; i < 15; i++) {
+						Log.d("Marlin", getClass().getName()
+								+ ": waiting for platform to be ready");
+						if (pf.isReady()) {
+							Log.d("Marlin", getClass().getName()
+									+ ": platform is ready");
+							break;
+						}
+						try {
+							Thread.sleep(2000);
+						} catch (InterruptedException e) {
+						}
+					}
+					Log.d("Marlin", getClass().getName() + ": continuing..");
+					for (Test2 test : tests) {		
+						//process the base url
+						pf.processUrl(test.getId()+"","0", test.getName(), test.getUrl(), null);//TODO: el ultimo getURL va a ser el traceroute. Ese debe venir en el test.
+						//process the url change given in the steps, others steps or parameters are being ignored
+						for (Step2 step : test.getSteps()) {
+							for(Parameter param:  step.getParameters()){
+								if(param.getName().equals("url")){//TODO: ver q va a mandar jose
+									pf.processUrl(test.getId()+"", step.getNumber()+"", test.getName(), param.getValue(), null);
+								}
+							}
 						}
 					}
 					Stats statsResult = pf.dump2(null);
@@ -544,6 +780,8 @@ public class AppService extends WakefulIntentService {
 		return testToRun;
 	}
 
+
+
 	/**
 	 * Returns all the tests from the web service
 	 * @return the list of tests
@@ -564,6 +802,37 @@ public class AppService extends WakefulIntentService {
 				for (int i = 0; i < testArray.length(); i++) {
 					JSONObject scriptObj = testArray.getJSONObject(i);
 					Test test = CreateTest(scriptObj);
+					testList.add(test);
+				}
+			} catch (Exception e) {
+				Log.e("Marlin", getClass().getName()
+						+ ": error while parsing scripts ", e);
+			}
+		}
+		return testList;
+	}
+
+
+	/**
+	 * Returns all the tests from the web service
+	 * @return the list of tests
+	 */
+	private List<Test2> getScripts3(){
+		RestHelper instance = RestHelper.getInstance();
+		List<Test2> testList = new ArrayList<Test2>();
+		String jsonResult = "";
+		try {
+			jsonResult = instance.GET(Constants.MARLIN_SCRIPTS_URL);
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+
+		if (jsonResult != null && jsonResult.trim().length() > 0) {
+			try {
+				JSONArray testArray = new JSONArray(jsonResult);
+				for (int i = 0; i < testArray.length(); i++) {
+					JSONObject scriptObj = testArray.getJSONObject(i);
+					Test2 test = CreateTest2(scriptObj);
 					testList.add(test);
 				}
 			} catch (Exception e) {
@@ -664,7 +933,7 @@ public class AppService extends WakefulIntentService {
 				List<Step> steps = new ArrayList<Step>();
 				JSONArray stepsArray = urlObj.getJSONArray("Steps");
 				for(int sIndex=0; sIndex<stepsArray.length(); sIndex++){
-					JSONObject stepObj = stepsArray.getJSONObject(uIndex);
+					JSONObject stepObj = stepsArray.getJSONObject(sIndex);
 					Step step = new Step();
 					step.setExtendedSpec(stepObj.getString("ExtendedSpec"));
 					step.setMethod(stepObj.getString("Method"));
@@ -676,7 +945,7 @@ public class AppService extends WakefulIntentService {
 					steps.add(step);
 				}
 				url.setSteps(steps);
-				
+
 				urls.add(url);
 			}
 			test.setURLs(urls);
@@ -690,6 +959,51 @@ public class AppService extends WakefulIntentService {
 		return test;
 	}
 
+	/**
+	 * Creates a test from a json piece of the downloaded tests
+	 * @param scriptObj the json piece that corresponds to a test
+	 * @return the Test object
+	 * @throws Exception any json transformation exception
+	 */
+	public Test2 CreateTest2(JSONObject scriptObj) throws Exception{
+		Test2 test = new Test2();
+		try {
+			//partes del tests simples
+			test.setId(scriptObj.getInt("id"));
+			test.setName(scriptObj.getString("name"));
+			test.setVersion((float)scriptObj.getDouble("version"));
+			test.setUrl(scriptObj.getString("URL"));
+
+			//los Steps
+			List<Step2> steps = new ArrayList<Step2>();
+			JSONArray stepsArray = scriptObj.getJSONArray("steps");
+			for(int sIndex=0; sIndex<stepsArray.length(); sIndex++){
+				JSONObject stepObj = stepsArray.getJSONObject(sIndex);
+				Step2 step = new Step2();
+				step.setNumber(stepObj.getInt("number"));
+				step.setType(ActionType.valueOf(stepObj.getString("type")));//TODO: coordinar el case de estos maes.
+
+				List<Parameter> parameters = new ArrayList<Parameter>();
+				JSONArray parametersArray = stepObj.getJSONArray("parameters");//TODO: esta mal escrito
+				for(int pIndex=0; pIndex<parametersArray.length(); pIndex++){
+					JSONObject parameterObj = parametersArray.getJSONObject(pIndex);
+					Parameter parameter = new Parameter();
+					parameter.setName(parameterObj.getString("name"));
+					parameter.setValue(parameterObj.getString("value"));
+					parameters.add(parameter);
+				}
+				step.setParameters(parameters);
+
+				steps.add(step);
+			}
+			test.setSteps(steps);
+
+		} catch (JSONException e) {
+			e.printStackTrace();
+			throw e;
+		}
+		return test;
+	}
 
 
 	/**
@@ -699,11 +1013,14 @@ public class AppService extends WakefulIntentService {
 	private void postDataToServer(Stats statsResult) {
 		List<TestResult> testResult = CreateTestResult(statsResult);
 		IJsonObject ijsonObject = new IJsonObject();
-		
+
+		String forTest = ijsonObject.ToGsonString(statsResult);
+
+		System.out.println(forTest);
 		String jsonString = ijsonObject.ToGsonString(testResult);	
 		try {
 			RestHelper instance = RestHelper.getInstance();
-			instance.PUT(Constants.MARLIN_SCRIPTS_URL, jsonString);
+			instance.POST(Constants.MARLIN_SCRIPTS_URL, jsonString);
 		} catch (Exception ex) {
 			ex.printStackTrace();
 		}
@@ -712,7 +1029,7 @@ public class AppService extends WakefulIntentService {
 
 	/**
 	 * Creates a TestResult object with the information stored in statsResult
-	 * @param statsResult All the resut test information
+	 * @param statsResult All the result test information
 	 * @return the TestResult with the information to be sent
 	 */
 	private List<TestResult> CreateTestResult(Stats statsResult) { //esto se crea x cada 
@@ -856,7 +1173,7 @@ public class AppService extends WakefulIntentService {
 		availableMeasure.setCategory(MeasureCategory.DEVICE);
 		availableMeasure.setType(MeasureType.LOAD);
 		availableMeasure.setMetric(Metric.BOOL);
-		availableMeasure.setValue((new Boolean(event.getAvailability()).toString()));
+		availableMeasure.setValue((Boolean.valueOf(event.getAvailability())).toString());
 		results.add(availableMeasure);
 
 		//throughput measure
@@ -914,17 +1231,123 @@ public class AppService extends WakefulIntentService {
 		results.add(contentMeasure);
 
 
-		List<PageElement> x= event.getPageElements();
-		for(PageElement y : x){
-			// TODO: x aqui voy: en event tengo mucha info de los elementos de la pagina, 
-			//ver como meter aqui
-		}
+		//List<PageElement> x= event.getPageElements();
+		//for(PageElement y : x){
+		// TODO: x aqui voy: en event tengo mucha info de los elementos de la pagina, 
+		//ver como meter aqui
+		//	}
+
+		Measure elementsMeasure = new Measure();
+		elementsMeasure.setMeasureItem("content_type");
+		elementsMeasure.setCategory(MeasureCategory.PERFORMANCE);
+		elementsMeasure.setType(MeasureType.LOAD);
+		//redirectMeasure.setMetric(Metric.BYTES);
+		elementsMeasure.setValue("");//TODO: tomar decision aqui si agregar nada mas la lista de elementos (x) o hacer un measure con cada uno y ver como es la mejor forma de manejar estos measures
+
+		results.add(elementsMeasure);
 
 		return results;
 	}
 
 
+
+	// TODO: cpu information
+	//Some processor info
+	public static String run(String[] cmd, String workdirectory) throws Exception {
+		String result = "";
+
+		try {
+			ProcessBuilder builder = new ProcessBuilder(cmd);
+			// set working directory
+			if (workdirectory != null)
+				builder.directory(new File(workdirectory));
+			builder.redirectErrorStream(true);
+			Process process = builder.start();
+			InputStream in = process.getInputStream();
+			byte[] re = new byte[1024];
+			while (in.read(re) != -1) {
+				System.out.println(new String(re));
+				result = result + new String(re);
+			}
+			in.close();
+
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+		return result;
+	}
+
+
+
+	// cpu info
+	public static  String fetch_cpu_info() {
+		String result = null;
+
+		try {
+			String[] args = { "/system/bin/cat", "/proc/cpuinfo" };
+			result = run(args, "/system/bin/");
+			Log.i("result", "result=" + result);
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+		return result;
+	}
+
+
+	//Screen size measures
+	public static String getScreenSize(Context context){
+		WindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+		Display display = wm.getDefaultDisplay();
+		int width = display.getWidth();  // deprecated
+		int height = display.getHeight();  // deprecated
+		return width+"x"+height;
+	}
+
+	public static String getLinkSpeed(Context context){
+		//TODO: aqui agregue para sacar el bandwidth pero solo con wifi
+		WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+		WifiInfo wifiInfo = wifiManager.getConnectionInfo();
+		int linkSpeed = 0;
+		if (wifiInfo != null) {
+			linkSpeed = wifiInfo.getLinkSpeed(); //measured using WifiInfo.LINK_SPEED_UNITS
+			Log.d("marlin", linkSpeed+"");
+		}
+		return linkSpeed + "";
+	}
+
+
+
+
 	//test string
 	//"[{\"Id\":1, \"Name\":\"Name of the test\",\"Version\":1.0,\"URLs\":[{\"URL\":\"http://www.testhost.com/site\",\"Type\":\"PAGE\",\"Steps\":[{\"Number\":1,\"Type\":\"NAVIGATE\",\"waitTime\":1000,\"Object\":\"TextArea\",\"Method\":\"onclick\",\"ExtendedSpec\":\"ExtendedSpec\"},{\"Number\":1,\"Type\":\"CLICK\",\"waitTime\":2000,\"Object\":\"Button\",\"Method\":\"onChange\",\"ExtendedSpec\":\"ExtendedSpec\"}]}],\"Modifiers\":[\"RUN_ONE_TIME\",\"RUN_ONE_TIME\"],\"LayerSpecs\":[{\"LayerName\":\"Pop\"},{\"LayerName\":\"Pop\"}],\"VerificationNumber\":[10,12,14,16,18],\"Measures\":[{\"Type\":\"CARRIER\",\"MeasureItem\":\"AT\u0026T\",\"Value\":\"\"},{\"Type\":\"CARRIER\",\"MeasureItem\":\"Sprint\",\"Value\":\"thevalue\"}],\"StartDate\":\"Sep 14, 2012 7:34:28 AM\",\"EndDate\":\"Sep 14, 2012 7:34:28 AM\",\"TestTimes\":[\"06:00:10 PM\",\"06:00:20 PM\"],\"TimeZone\":\"UTC\"}]";
 
+	/*{
+
+ Ê Ê"id": 2,
+ Ê Ê"name": "Google Response",
+ Ê Ê"version": "1.0",
+ Ê Ê"URL": "www.google.com",
+ Ê Ê"steps": [
+ Ê Ê Ê Ê{
+ Ê Ê Ê Ê Ê Ê"number": 1,
+ Ê Ê Ê Ê Ê Ê"type": "navigate",
+ Ê Ê Ê Ê Ê Ê"paramethers": [
+ Ê Ê Ê Ê Ê Ê Ê Ê{
+ Ê Ê Ê Ê Ê Ê Ê Ê Ê Ê"name": "waittime",
+ Ê Ê Ê Ê Ê Ê Ê Ê Ê Ê"value": "1000"
+ Ê Ê Ê Ê Ê Ê Ê Ê},
+ Ê Ê Ê Ê Ê Ê Ê Ê{
+ Ê Ê Ê Ê Ê Ê Ê Ê Ê Ê"name": "object",
+ Ê Ê Ê Ê Ê Ê Ê Ê Ê Ê"value": "textarea"
+ Ê Ê Ê Ê Ê Ê Ê Ê}
+ Ê Ê Ê Ê Ê Ê]
+ Ê Ê Ê Ê}
+ Ê Ê]
+
 }
+	 * */
+}
+
+
+
+
